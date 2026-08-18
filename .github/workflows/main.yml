@@ -1,0 +1,33 @@
+name: Weekly Dashboard Update
+
+on:
+  schedule:
+    # 设定每周四北京时间下午3点 (UTC早上7点) 自动抓取
+    - cron: '0 7 * * 4'
+  workflow_dispatch: # 允许你随时点击按钮手动运行
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: 获取代码仓库
+      uses: actions/checkout@v3
+
+    - name: 配置 Python 环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: 运行爬虫与生成器
+      run: python main.py
+
+    - name: 提交并推送生成的 index.html
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add index.html
+        git commit -m "Auto-update CDC data" || echo "No changes to commit"
+        git push
