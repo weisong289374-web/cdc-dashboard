@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全国急性呼吸道传染病数字驾驶舱</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        /* 核心暗黑科技风样式 */
+        body { background-color: #0b0f19; background-image: radial-gradient(circle at 50% 0%, #1a233a 0%, #0b0f19 70%); font-family: -apple-system, 'Microsoft YaHei', sans-serif; color: #e0e6ed; margin: 0; padding: 20px; display: flex; flex-direction: column; min-height: 100vh; }
+        .container { max-width: 1500px; margin: 0 auto; flex: 1; width: 100%; }
+        .header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid rgba(0, 229, 255, 0.2); padding-bottom: 15px; margin-bottom: 20px; }
+        .header h1 { margin: 0; color: #00e5ff; font-size: 26px; text-shadow: 0 0 15px rgba(0, 229, 255, 0.4); letter-spacing: 1px; }
+        .header .meta { color: #8c9eff; font-size: 14px; }
+        
+        /* 顶部控制栏 */
+        .controls { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; background: rgba(16, 22, 40, 0.6); padding: 15px 20px; border-radius: 8px; border: 1px solid rgba(0, 229, 255, 0.1); }
+        .control-group { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+        
+        select, button { background: rgba(11, 21, 40, 0.9); color: #00e5ff; border: 1px solid rgba(0, 229, 255, 0.5); padding: 8px 12px; border-radius: 4px; font-size: 14px; cursor: pointer; transition: all 0.3s; outline: none; }
+        select:hover, button:hover { box-shadow: 0 0 10px rgba(0, 229, 255, 0.4); background: rgba(0, 229, 255, 0.1); }
+        .btn-action { color: #ffab00; border-color: #ffab00; font-weight: bold; }
+        .btn-action:hover { box-shadow: 0 0 10px rgba(255, 171, 0, 0.4); background: rgba(255, 171, 0, 0.1); }
+        
+        .time-filter-box { display: flex; align-items: center; gap: 8px; background: rgba(0, 229, 255, 0.05); padding: 5px 15px; border-radius: 6px; border: 1px solid rgba(0, 229, 255, 0.2); }
+        .time-filter-box span { color: #8c9eff; font-size: 13px; }
+        .btn-query { background: rgba(0, 229, 255, 0.2); font-weight: bold; border-color: #00e5ff; }
+        
+        .mode-toggle { display: flex; border-radius: 4px; overflow: hidden; border: 1px solid rgba(0, 229, 255, 0.5); }
+        .mode-btn { border: none; background: rgba(11, 21, 40, 0.9); border-radius: 0; padding: 8px 15px; }
+        .mode-btn.active { background: #00e5ff; color: #0b0f19; font-weight: bold; }
+
+        .chart-box { width: 100%; height: 550px; background: rgba(16, 22, 40, 0.85); border-radius: 8px; border: 1px solid rgba(0, 229, 255, 0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.5); padding: 20px; box-sizing: border-box; margin-bottom: 20px; }
+        .table-panel { background: rgba(16, 22, 40, 0.6); border: 1px solid rgba(0, 229, 255, 0.1); border-radius: 8px; padding: 20px; overflow-x: auto; }
+        .table-panel h3 { margin-top: 0; color: #00e5ff; font-size: 16px; border-bottom: 1px dashed rgba(0, 229, 255, 0.2); padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: center; white-space: nowrap; }
+        th, td { padding: 12px 10px; border-bottom: 1px solid rgba(140, 158, 255, 0.1); }
+        th { font-weight: bold; background: rgba(0, 229, 255, 0.05); }
+        tr:hover { background: rgba(0, 229, 255, 0.08); }
+
+        /* 全新：可视化数据维护中枢样式 */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(8px); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: #0b0f19; border: 1px solid #00e5ff; border-radius: 8px; width: 1300px; max-width: 95%; max-height: 90vh; box-shadow: 0 0 40px rgba(0, 229, 255, 0.3); padding: 20px; display: flex; flex-direction: column; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(0, 229, 255, 0.3); padding-bottom: 10px; margin-bottom: 15px; }
+        .modal-header h3 { margin: 0; color: #ffab00; font-size: 20px; }
+        .close-btn { color: #8c9eff; font-size: 28px; cursor: pointer; border: none; background: none; }
+        .close-btn:hover { color: #ff4d4f; }
+        
+        .gui-editor-wrapper { overflow-x: auto; overflow-y: auto; flex: 1; margin-bottom: 15px; border: 1px solid rgba(140, 158, 255, 0.2); border-radius: 4px; background: rgba(5, 7, 10, 0.5); }
+        .gui-table { width: 100%; border-collapse: collapse; }
+        .gui-table th { background: rgba(0, 229, 255, 0.1); position: sticky; top: 0; z-index: 10; font-size: 13px; color: #00e5ff; padding: 10px 5px; }
+        .gui-table td { padding: 5px; text-align: center; border-bottom: 1px solid rgba(140, 158, 255, 0.1); }
+        .gui-input { width: 60px; background: rgba(11, 21, 40, 0.8); color: #fff; border: 1px solid #3949ab; border-radius: 4px; padding: 6px; text-align: center; font-size: 13px; }
+        .gui-input:focus { border-color: #00e5ff; outline: none; box-shadow: 0 0 5px rgba(0, 229, 255, 0.5); }
+        .gui-input.week-name { width: 110px; color: #00e5ff; font-weight: bold; }
+        
+        .btn-add-row { background: rgba(0, 229, 255, 0.05); color: #00e5ff; border: 1px dashed #00e5ff; padding: 10px; border-radius: 4px; cursor: pointer; width: 100%; text-align: center; margin-bottom: 15px; transition: 0.3s; }
+        .btn-add-row:hover { background: rgba(0, 229, 255, 0.15); }
+        .btn-delete-row { background: transparent; color: #ff4d4f; border: none; font-size: 16px; cursor: pointer; }
+        .btn-delete-row:hover { text-shadow: 0 0 8px rgba(255, 77, 79, 0.8); }
+        
+        .modal-footer { display: flex; justify-content: flex-end; gap: 15px; margin-top: 10px; }
+
+        /* 版权页脚样式 */
+        .page-footer { text-align: center; padding: 25px 0 10px 0; color: #4b5a77; font-size: 13px; border-top: 1px dashed rgba(140, 158, 255, 0.1); margin-top: 30px; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>■ 呼吸道传染病哨点监测数据中心</h1>
+        <div class="meta" id="updateTimeDisplay">最后同步时间：等待加载...</div>
+    </div>
+
+    <!-- 顶部控制面板 -->
+    <div class="controls">
+        <div class="control-group">
+            <div class="mode-toggle">
+                <button class="mode-btn active" id="btnModeContinuous" onclick="switchMode('continuous')">📈 连续趋势模式</button>
+                <button class="mode-btn" id="btnModeYoY" onclick="switchMode('yoy')">⚖️ 同比分析模式</button>
+            </div>
+            <select id="virusFilter" onchange="renderChart()">
+                <option value="all" id="optAllVirus">👁️ 查看全部 10 种病原体</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <div class="time-filter-box" id="timeFilterBox">
+                <span>从:</span>
+                <select id="startYear"></select> <select id="startWeek"></select>
+                <span>至:</span>
+                <select id="endYear"></select> <select id="endWeek"></select>
+                <button class="btn-query" onclick="applyFilters()">🔍 确认区间</button>
+            </div>
+            
+            <div class="time-filter-box" id="yoyFilterBox" style="display: none;">
+                <span>对比基准年份:</span>
+                <select id="yoyBaseYear" onchange="applyFilters()"></select>
+                <span>对比:</span>
+                <select id="yoyCompareYear" onchange="applyFilters()"></select>
+            </div>
+            
+            <button class="btn-action" onclick="openModal()">🛠️ 可视化数据维护</button>
+        </div>
+    </div>
+
+    <div class="chart-box" id="mainChart"></div>
+
+    <div class="table-panel">
+        <h3 id="tableTitle">📊 监测明细数据表</h3>
+        <table id="dataTable">
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 页脚版权信息 -->
+<div class="page-footer">
+    © 圣湘呼吸道事业部版权所有，侵权必究。
+</div>
+
+<!-- 全新：Excel式 可视化数据维护弹窗 -->
+<div class="modal-overlay" id="dataModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>🛠️ 可视化数据维护中枢</h3>
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+        </div>
+        <p style="color:#8c9eff; font-size:13px; margin-top:0; margin-bottom:15px;">说明：您可以直接在下方表格中修改阳性率数字（%）。若某周无数据留空即可。修改完毕后点击“保存覆写”将全局同步大屏。</p>
+        
+        <div class="gui-editor-wrapper">
+            <table class="gui-table" id="guiEditorTable">
+                <thead>
+                    <tr>
+                        <th>监测周期 (如:2026年第5周)</th>
+                        <th style="color:#00E5FF">新冠病毒</th>
+                        <th style="color:#FFEA00">甲型流感</th>
+                        <th style="color:#FF5252">乙型流感</th>
+                        <th style="color:#B2FF59">RSV</th>
+                        <th style="color:#E040FB">肺炎支原体</th>
+                        <th style="color:#FF9800">腺病毒</th>
+                        <th style="color:#00B0FF">鼻病毒</th>
+                        <th style="color:#F50057">副流感病毒</th>
+                        <th style="color:#1DE9B6">偏肺病毒</th>
+                        <th style="color:#76FF03">冠状病毒</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="guiEditorBody">
+                    <!-- JS动态注入输入框行 -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="btn-add-row" onclick="addEmptyRow()">➕ 添加新一周数据排期</div>
+        
+        <div class="modal-footer">
+            <button onclick="closeModal()" style="border-color: #5c6b89; color: #5c6b89; background: transparent;">取消更改</button>
+            <button class="btn-action" onclick="saveGuiData()">💾 保存覆写并刷新大屏</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ==========================================
+    // 1. 核心数据模型
+    // ==========================================
+    const pathogenConfig = [
+        { key: 'covid', name: '新冠病毒', color: '#00E5FF' },
+        { key: 'fluA', name: '甲型流感', color: '#FFEA00' },
+        { key: 'fluB', name: '乙型流感', color: '#FF5252' },
+        { key: 'rsv', name: 'RSV', color: '#B2FF59' },
+        { key: 'mycoplasma', name: '肺炎支原体', color: '#E040FB' },
+        { key: 'adenovirus', name: '腺病毒', color: '#FF9800' },
+        { key: 'rhinovirus', name: '鼻病毒', color: '#00B0FF' },
+        { key: 'parainfluenza', name: '副流感病毒', color: '#F50057' },
+        { key: 'hmpv', name: '偏肺病毒', color: '#1DE9B6' },
+        { key: 'coronavirus', name: '普通冠状病毒', color: '#76FF03' }
+    ];
+
+    // Python 数据注入占位符
+    const injectedDataStr = {"updateTime": "2026-08-18 09:32:15 (自动抓取更新)", "weeks": ["2026年第1周", "2026年第2周", "2026年第32周"], "covid": [8.5, 9.2, 9.2], "fluA": [20.1, 22.5, 22.5], "fluB": [3.5, 4.2, 4.2], "rsv": [11.5, 12.8, 12.8], "mycoplasma": [4.8, 5.2, 5.2], "adenovirus": [4.2, 4.8, 4.8], "rhinovirus": [10.0, 9.8, 9.8], "parainfluenza": [4.5, 4.1, 4.1], "hmpv": [4.0, 3.8, 3.8], "coronavirus": [3.5, 3.9, 3.9]};
+    
+    // 演示模拟数据
+    const fallbackData = {
+        updateTime: "2026-08-17 14:30:00",
+        weeks: ["2025年第1周", "2025年第2周", "2025年第3周", "2026年第1周", "2026年第2周", "2026年第3周"],
+        covid: [8.5, 9.2, 10.5, 6.5, 7.2, 8.5],
+        fluA: [20.1, 22.5, 25.4, 30.1, 28.5, 25.4],
+        fluB: [3.5, 4.2, 5.0, 8.5, 5.8, 4.2],
+        rsv: [11.5, 12.8, 13.5, 9.5, 10.8, 11.5],
+        mycoplasma: [4.8, 5.2, 5.5, 3.8, 4.2, 4.5],
+        adenovirus: [4.2, 4.8, 5.1, 3.2, 3.8, 4.1],
+        rhinovirus: [10.0, 9.8, 9.2, 9.0, 8.8, 8.2],
+        parainfluenza: [4.5, 4.1, 3.8, 3.5, 3.1, 2.8],
+        hmpv: [4.0, 3.8, 3.5, 3.0, 2.8, 2.5],
+        coronavirus: [3.5, 3.9, 4.2, 2.5, 2.9, 3.2]
+    };
+
+    let currentData;
+    try { currentData = JSON.parse(injectedDataStr); } catch(e) { currentData = fallbackData; }
+
+    const chart = echarts.init(document.getElementById('mainChart'));
+    let currentMode = 'continuous'; 
+    let filterStartIdx = 0;
+    let filterEndIdx = currentData.weeks.length - 1;
+
+    // ==========================================
+    // 2. 初始化与 UI 构造
+    // ==========================================
+    function parseWeek(weekStr) {
+        const m = weekStr.match(/(\d{4})年第(\d{1,2})周/);
+        return m ? { year: parseInt(m[1]), week: parseInt(m[2]), val: parseInt(m[1])*100 + parseInt(m[2]) } : null;
+    }
+
+    function initUI() {
+        document.getElementById('updateTimeDisplay').innerText = `最后同步时间：${currentData.updateTime}`;
+        
+        const virusSelect = document.getElementById('virusFilter');
+        virusSelect.innerHTML = '<option value="all" id="optAllVirus">👁️ 查看全部 10 种病原体</option>';
+        pathogenConfig.forEach(p => virusSelect.innerHTML += `<option value="${p.key}">🔬 聚焦：${p.name}</option>`);
+
+        const years = [...new Set(currentData.weeks.map(w => parseWeek(w)?.year).filter(Boolean))].sort();
+        let yearOpts = ''; years.forEach(y => yearOpts += `<option value="${y}">${y}年</option>`);
+        
+        document.getElementById('startYear').innerHTML = yearOpts;
+        document.getElementById('endYear').innerHTML = yearOpts;
+        document.getElementById('yoyBaseYear').innerHTML = yearOpts;
+        document.getElementById('yoyCompareYear').innerHTML = yearOpts;
+
+        let weekOpts = ''; for(let i=1; i<=53; i++) weekOpts += `<option value="${i}">第${i}周</option>`;
+        document.getElementById('startWeek').innerHTML = weekOpts;
+        document.getElementById('endWeek').innerHTML = weekOpts;
+
+        if(years.length >= 2) {
+            document.getElementById('yoyBaseYear').value = years[years.length-1]; 
+            document.getElementById('yoyCompareYear').value = years[years.length-2];
+        }
+
+        applyFilters();
+    }
+
+    // ==========================================
+    // 3. 核心控制器与数据截断
+    // ==========================================
+    function switchMode(mode) {
+        currentMode = mode;
+        const vFilter = document.getElementById('virusFilter');
+        const optAll = document.getElementById('optAllVirus');
+        
+        if (mode === 'continuous') {
+            document.getElementById('btnModeContinuous').classList.add('active');
+            document.getElementById('btnModeYoY').classList.remove('active');
+            document.getElementById('timeFilterBox').style.display = 'flex';
+            document.getElementById('yoyFilterBox').style.display = 'none';
+            if(optAll) optAll.style.display = 'block'; 
+        } else {
+            document.getElementById('btnModeYoY').classList.add('active');
+            document.getElementById('btnModeContinuous').classList.remove('active');
+            document.getElementById('timeFilterBox').style.display = 'none';
+            document.getElementById('yoyFilterBox').style.display = 'flex';
+            if(optAll) optAll.style.display = 'none'; 
+            if(vFilter.value === 'all') vFilter.value = 'covid';
+        }
+        applyFilters();
+    }
+
+    function applyFilters() {
+        if (currentMode === 'continuous') {
+            const sy = parseInt(document.getElementById('startYear').value);
+            const sw = parseInt(document.getElementById('startWeek').value);
+            const ey = parseInt(document.getElementById('endYear').value);
+            const ew = parseInt(document.getElementById('endWeek').value);
+            
+            const startVal = sy * 100 + sw;
+            const endVal = ey * 100 + ew;
+            if(startVal > endVal) { alert('开始时间不能晚于结束时间！'); return; }
+
+            filterStartIdx = 0; filterEndIdx = currentData.weeks.length - 1;
+            for(let i=0; i<currentData.weeks.length; i++) {
+                const p = parseWeek(currentData.weeks[i]);
+                if(p && p.val >= startVal) { filterStartIdx = i; break; }
+            }
+            for(let i=currentData.weeks.length-1; i>=0; i--) {
+                const p = parseWeek(currentData.weeks[i]);
+                if(p && p.val <= endVal) { filterEndIdx = i; break; }
+            }
+        }
+        renderChart();
+        renderTable();
+    }
+
+    // ==========================================
+    // 4. 图表与表格渲染
+    // ==========================================
+    function renderChart() {
+        const selectedVirus = document.getElementById('virusFilter').value;
+        let option = {};
+
+        if (currentMode === 'continuous') {
+            const slicedWeeks = currentData.weeks.slice(filterStartIdx, filterEndIdx + 1);
+            const seriesData = []; const legendData = [];
+
+            pathogenConfig.forEach(p => {
+                if (selectedVirus === 'all' || selectedVirus === p.key) {
+                    legendData.push(p.name);
+                    seriesData.push({
+                        name: p.name, type: 'line', smooth: true, showSymbol: false,
+                        lineStyle: { width: 3, shadowBlur: 10, shadowColor: p.color },
+                        itemStyle: { color: p.color },
+                        data: currentData[p.key].slice(filterStartIdx, filterEndIdx + 1)
+                    });
+                }
+            });
+            option = buildChartConfig(legendData, slicedWeeks, seriesData);
+
+        } else {
+            const baseYear = parseInt(document.getElementById('yoyBaseYear').value);
+            const compYear = parseInt(document.getElementById('yoyCompareYear').value);
+            const pInfo = pathogenConfig.find(p => p.key === selectedVirus);
+            
+            const maxWeek = 53;
+            const xAxisWeeks = Array.from({length: maxWeek}, (_, i) => `第${i+1}周`);
+            const baseData = new Array(maxWeek).fill(null);
+            const compData = new Array(maxWeek).fill(null);
+
+            currentData.weeks.forEach((w, i) => {
+                const parsed = parseWeek(w);
+                if(parsed) {
+                    if (parsed.year === baseYear) baseData[parsed.week - 1] = currentData[pInfo.key][i];
+                    if (parsed.year === compYear) compData[parsed.week - 1] = currentData[pInfo.key][i];
+                }
+            });
+
+            option = buildChartConfig([`${baseYear}年`, `${compYear}年`], xAxisWeeks, [
+                { name: `${baseYear}年`, type: 'line', smooth: true, lineStyle: { width: 4, shadowBlur: 10, shadowColor: pInfo.color }, itemStyle: { color: pInfo.color }, data: baseData },
+                { name: `${compYear}年`, type: 'line', smooth: true, lineStyle: { width: 3, type: 'dashed' }, itemStyle: { color: '#a8b2c1' }, data: compData }
+            ]);
+        }
+        chart.clear(); chart.setOption(option, true);
+    }
+
+    function buildChartConfig(legends, xData, series) {
+        return {
+            tooltip: { trigger: 'axis', backgroundColor: 'rgba(11, 21, 40, 0.95)', borderColor: '#00e5ff', textStyle: { color: '#fff' }, valueFormatter: v => v != null ? v + ' %' : '-' },
+            legend: { data: legends, textStyle: { color: '#8c9eff' }, top: 0 },
+            grid: { left: '2%', right: '3%', bottom: '8%', top: '15%', containLabel: true },
+            xAxis: { type: 'category', boundaryGap: false, data: xData, axisLine: { lineStyle: { color: '#3949ab' } }, axisLabel: { color: '#8c9eff' } },
+            yAxis: { type: 'value', name: '阳性检出率 (%)', nameTextStyle: { color: '#8c9eff' }, splitLine: { lineStyle: { color: 'rgba(57, 73, 171, 0.3)', type: 'dashed' } }, axisLabel: { color: '#8c9eff' } },
+            series: series
+        };
+    }
+
+    function renderTable() {
+        const thead = document.getElementById('tableHead');
+        const tbody = document.getElementById('tableBody');
+        const title = document.getElementById('tableTitle');
+        const selectedVirus = document.getElementById('virusFilter').value;
+
+        thead.innerHTML = ''; tbody.innerHTML = '';
+
+        if (currentMode === 'continuous') {
+            title.innerText = `📊 连续趋势明细表 [${currentData.weeks[filterStartIdx]} 至 ${currentData.weeks[filterEndIdx]}]`;
+            let headHTML = '<tr><th>监测周期</th>';
+            pathogenConfig.forEach(p => { if (selectedVirus === 'all' || selectedVirus === p.key) headHTML += `<th style="color:${p.color}">${p.name}</th>`; });
+            thead.innerHTML = headHTML + '</tr>';
+
+            for(let i = filterStartIdx; i <= filterEndIdx; i++) {
+                let rowHTML = `<td>${currentData.weeks[i]}</td>`;
+                pathogenConfig.forEach(p => {
+                    if (selectedVirus === 'all' || selectedVirus === p.key) {
+                        let val = currentData[p.key][i];
+                        rowHTML += `<td>${val != null ? val + '%' : '-'}</td>`;
+                    }
+                });
+                tbody.innerHTML += `<tr>${rowHTML}</tr>`;
+            }
+        } else {
+            const baseYear = document.getElementById('yoyBaseYear').value;
+            const compYear = document.getElementById('yoyCompareYear').value;
+            const pInfo = pathogenConfig.find(p => p.key === selectedVirus);
+            title.innerText = `📊 [${pInfo.name}] ${baseYear}年 vs ${compYear}年 同比对齐表`;
+
+            thead.innerHTML = `<tr><th>监测周期</th><th style="color:${pInfo.color}">${baseYear}年阳性率</th><th style="color:#a8b2c1">${compYear}年同期阳性率</th></tr>`;
+
+            for(let week = 1; week <= 53; week++) {
+                let valBase = '-', valComp = '-';
+                currentData.weeks.forEach((w, idx) => {
+                    const parsed = parseWeek(w);
+                    if (parsed && parsed.week === week) {
+                        if (parsed.year == baseYear && currentData[pInfo.key][idx] != null) valBase = currentData[pInfo.key][idx] + '%';
+                        if (parsed.year == compYear && currentData[pInfo.key][idx] != null) valComp = currentData[pInfo.key][idx] + '%';
+                    }
+                });
+                if (valBase !== '-' || valComp !== '-') {
+                    tbody.innerHTML += `<tr><td>第 ${week} 周</td><td style="color:${pInfo.color}">${valBase}</td><td style="color:#a8b2c1">${valComp}</td></tr>`;
+                }
+            }
+        }
+    }
+
+    // ==========================================
+    // 5. Excel式 可视化维护中枢逻辑
+    // ==========================================
+    function openModal() {
+        renderGuiEditor();
+        document.getElementById('dataModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('dataModal').style.display = 'none';
+    }
+
+    // 根据当前数据生成 GUI 表格行
+    function renderGuiEditor() {
+        const tbody = document.getElementById('guiEditorBody');
+        tbody.innerHTML = '';
+        currentData.weeks.forEach((week, idx) => {
+            tbody.appendChild(createGuiRow(week, idx));
+        });
+    }
+
+    // 创建单行 HTML 结构
+    function createGuiRow(weekName = '', idx = -1) {
+        const tr = document.createElement('tr');
+        
+        let tds = `<td><input type="text" class="gui-input week-name" placeholder="202X年第X周" value="${weekName}"></td>`;
+        
+        pathogenConfig.forEach(p => {
+            let val = (idx >= 0 && currentData[p.key][idx] != null) ? currentData[p.key][idx] : '';
+            tds += `<td><input type="number" class="gui-input" step="0.1" value="${val}"></td>`;
+        });
+        
+        tds += `<td><button class="btn-delete-row" onclick="this.closest('tr').remove()" title="删除此周">🗑️</button></td>`;
+        tr.innerHTML = tds;
+        return tr;
+    }
+
+    // 添加空行
+    function addEmptyRow() {
+        const tbody = document.getElementById('guiEditorBody');
+        tbody.appendChild(createGuiRow());
+        // 自动滚动到最底部
+        const wrapper = document.querySelector('.gui-editor-wrapper');
+        wrapper.scrollTop = wrapper.scrollHeight;
+    }
+
+    // 解析并保存用户的输入
+    function saveGuiData() {
+        const tbody = document.getElementById('guiEditorBody');
+        const rows = tbody.querySelectorAll('tr');
+        
+        // 准备新的空数据骨架
+        const newData = {
+            updateTime: new Date().toLocaleString() + " (手动覆写)",
+            weeks: [],
+            covid: [], fluA: [], fluB: [], rsv: [], mycoplasma: [],
+            adenovirus: [], rhinovirus: [], parainfluenza: [], hmpv: [], coronavirus: []
+        };
+        
+        // 辅助安全解析函数：如果输入框为空或者非数字，则返回 null
+        const parseVal = val => {
+            const num = parseFloat(val);
+            return isNaN(num) ? null : num;
+        };
+
+        let hasError = false;
+
+        rows.forEach(row => {
+            const inputs = row.querySelectorAll('input');
+            const weekStr = inputs[0].value.trim();
+            
+            if (!weekStr) return; // 跳过未填写周次名称的空行
+            
+            // 简单校验格式 (建议包含 "年" 和 "周")
+            if (!weekStr.includes('年') || !weekStr.includes('周')) {
+                hasError = true;
+            }
+            
+            newData.weeks.push(weekStr);
+            newData.covid.push(parseVal(inputs[1].value));
+            newData.fluA.push(parseVal(inputs[2].value));
+            newData.fluB.push(parseVal(inputs[3].value));
+            newData.rsv.push(parseVal(inputs[4].value));
+            newData.mycoplasma.push(parseVal(inputs[5].value));
+            newData.adenovirus.push(parseVal(inputs[6].value));
+            newData.rhinovirus.push(parseVal(inputs[7].value));
+            newData.parainfluenza.push(parseVal(inputs[8].value));
+            newData.hmpv.push(parseVal(inputs[9].value));
+            newData.coronavirus.push(parseVal(inputs[10].value));
+        });
+
+        if (hasError) {
+            alert('⚠️ 提示：部分周次名称可能格式不标准，建议统一使用 "2026年第1周" 这种格式，以免影响时间轴缩放和同比分析功能。');
+        }
+
+        if (newData.weeks.length === 0) {
+            alert('❌ 无法保存：数据表不能为空！');
+            return;
+        }
+
+        // 覆盖全局数据池并重载页面
+        currentData = newData;
+        initUI();
+        closeModal();
+        alert('✅ 数据保存成功！系统已全局同步。');
+    }
+
+    // 页面加载启动
+    initUI();
+    window.addEventListener('resize', () => chart.resize());
+</script>
+
+</body>
+</html>
