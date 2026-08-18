@@ -210,64 +210,79 @@
     // ==========================================
     // 2. 初始化与 UI 构造
     // ==========================================
-    function parseWeek(weekStr) {
-        const m = weekStr.match(/(\d{4})年第(\d{1,2})周/);
-        return m ? { year: parseInt(m[1]), week: parseInt(m[2]), val: parseInt(m[1])*100 + parseInt(m[2]) } : null;
+    // ==========================================
+// 升级版：时间解析引擎 (极大增强了容错率，无视空格)
+// ==========================================
+function parseWeek(weekStr) {
+    if (!weekStr) return null;
+    // 1. 剔除所有空格，防止手误多打了空格
+    const cleanStr = weekStr.replace(/\s+/g, '');
+    // 2. 正常匹配 "2026年第5周" 
+    let m = cleanStr.match(/(\d{4})年第(\d{1,2})周/);
+    if (m) {
+        return { year: parseInt(m[1]), week: parseInt(m[2]), val: parseInt(m[1]) * 100 + parseInt(m[2]) };
     }
+    // 3. 容错匹配：如果没写年份，只写了 "第5周"，默认当做今年
+    m = cleanStr.match(/第(\d{1,2})周/);
+    if (m) {
+        const currentYear = new Date().getFullYear();
+        return { year: currentYear, week: parseInt(m[1]), val: currentYear * 100 + parseInt(m[1]) };
+    }
+    return null; // 完全无法识别
+}
 
-    function initUI() {
-        document.getElementById('updateTimeDisplay').innerText = `最后同步时间：${currentData.updateTime}`;
+// ==========================================
+// 升级版：数据截断与图表联动引擎
+// ==========================================
+function applyFilters() {
+    if (currentMode === 'continuous') {
+        const syStr = document.getElementById('startYear').value;
+        const swStr = document.getElementById('startWeek').value;
+        const eyStr = document.getElementById('endYear').value;
+        const ewStr = document.getElementById('endWeek').value;
         
-        const virusSelect = document.getElementById('virusFilter');
-        virusSelect.innerHTML = '<option value="all" id="optAllVirus">👁️ 查看全部 10 种病原体</option>';
-        pathogenConfig.forEach(p => virusSelect.innerHTML += `<option value="${p.key}">🔬 聚焦：${p.name}</option>`);
-
-        const years = [...new Set(currentData.weeks.map(w => parseWeek(w)?.year).filter(Boolean))].sort();
-        let yearOpts = ''; years.forEach(y => yearOpts += `<option value="${y}">${y}年</option>`);
-        
-        document.getElementById('startYear').innerHTML = yearOpts;
-        document.getElementById('endYear').innerHTML = yearOpts;
-        document.getElementById('yoyBaseYear').innerHTML = yearOpts;
-        document.getElementById('yoyCompareYear').innerHTML = yearOpts;
-
-        let weekOpts = ''; for(let i=1; i<=53; i++) weekOpts += `<option value="${i}">第${i}周</option>`;
-        document.getElementById('startWeek').innerHTML = weekOpts;
-        document.getElementById('endWeek').innerHTML = weekOpts;
-
-        if(years.length >= 2) {
-            document.getElementById('yoyBaseYear').value = years[years.length-1]; 
-            document.getElementById('yoyCompareYear').value = years[years.length-2];
+        // 防呆处理：如果下拉框没值，直接中止
+        if(!syStr || !eyStr) {
+            alert('⚠️ 时间选项未加载，请确认是否有合法的监测数据。');
+            return;
         }
 
-        applyFilters();
-    }
-
-    // ==========================================
-    // 3. 核心控制器与数据截断
-    // ==========================================
-    function switchMode(mode) {
-        currentMode = mode;
-        const vFilter = document.getElementById('virusFilter');
-        const optAll = document.getElementById('optAllVirus');
+        const startVal = parseInt(syStr) * 100 + parseInt(swStr);
+        const endVal = parseInt(eyStr) * 100 + parseInt(ewStr);
         
-        if (mode === 'continuous') {
-            document.getElementById('btnModeContinuous').classList.add('active');
-            document.getElementById('btnModeYoY').classList.remove('active');
-            document.getElementById('timeFilterBox').style.display = 'flex';
-            document.getElementById('yoyFilterBox').style.display = 'none';
-            if(optAll) optAll.style.display = 'block'; 
-        } else {
-            document.getElementById('btnModeYoY').classList.add('active');
-            document.getElementById('btnModeContinuous').classList.remove('active');
-            document.getElementById('timeFilterBox').style.display = 'none';
-            document.getElementById('yoyFilterBox').style.display = 'flex';
-            if(optAll) optAll.style.display = 'none'; 
-            if(vFilter.value === 'all') vFilter.value = 'covid';
+        if (startVal > endVal) { 
+            alert('⚠️ 开始时间不能晚于结束时间！'); 
+            return; 
         }
-        applyFilters();
-    }
 
-    function applyFilters() {
+        // 核心修复点：更稳健的边界区间查找逻辑
+        let newStartIdx = -1;
+        let newEndIdx = -1;
+        
+        for(let i=0; i= startVal) {
+                newStartIdx = i;
+            }
+            // 不断向后推，直到最后一个小于等于结束时间的数据
+            if(p.val <= endVal) {
+                newEndIdx = i;
+            }
+        }
+        
+        // 判断用户筛选的区间内是否真的有数据
+        if (newStartIdx === -1 || newEndIdx === -1 || newStartIdx > newEndIdx) {
+            alert('⚠️ 您选择的时间区间内没有监测数据，请尝试放宽筛选范围！');
+            return;
+        }
+        
+        // 赋值给全局变量，提供给 ECharts 和表格渲染使用
+        filterStartIdx = newStartIdx;
+        filterEndIdx = newEndIdx;
+    }
+    
+    // 同步重绘图表和表格
+    renderChart();
+    renderTable();
+}{
         if (currentMode === 'continuous') {
             const sy = parseInt(document.getElementById('startYear').value);
             const sw = parseInt(document.getElementById('startWeek').value);
