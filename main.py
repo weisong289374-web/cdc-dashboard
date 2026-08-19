@@ -4,9 +4,16 @@ import json
 import datetime
 from bs4 import BeautifulSoup
 
-# 【绝对防御系统】：即使爬虫被拦截，也提供一套完整的历史数据骨架供网页渲染，确保网页永远可用
+# ==========================================
+# 🛑 核心配置区：每周更新这里的网址
+# ==========================================
+# 请将每周疾控中心发布的最新一期《全国急性呼吸道传染病哨点监测情况》的【具体文章网页链接】粘贴在下方：
+TARGET_URL = "https://www.chinacdc.cn/jksj/jksj04_14275/202608/t20260813_1838936.html" 
+# (注意：上面的链接只是示例，请务必替换为真实的当周文章链接)
+
+# 兜底防御数据（勿动）
 safe_fallback_data = {
-    "updateTime": "2026-08-17 14:30:00 (安全模式加载)",
+    "updateTime": "2026-08-17 14:30:00 (防御模式：未抓取到真实数据)",
     "weeks": ["2026年第1周", "2026年第2周", "2026年第3周", "2026年第4周", "2026年第5周"],
     "covid": [6.5, 7.2, 8.5, 9.8, 11.2],
     "fluA": [30.1, 28.5, 25.4, 22.1, 18.5],
@@ -26,23 +33,39 @@ def extract_pathogen_data(text, pathogen_keywords):
     return float(match.group(1)) if match else None
 
 def process_weekly_data():
-    target_url = "https://www.chinacdc.cn/jkzt/crb/zl/szkb_11803/" 
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/114.0.0.0 Safari/537.36"}
+    # 增加更真实的浏览器伪装头，降低被 CDC 防火墙拦截的概率
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+        "Connection": "keep-alive"
+    }
     
     try:
-        response = requests.get(target_url, headers=headers, timeout=10)
+        response = requests.get(TARGET_URL, headers=headers, timeout=15)
         response.encoding = 'utf-8'
         soup = BeautifulSoup(response.text, 'html.parser')
-        article_text = soup.get_text(separator=' ', strip=True)
         
-        # 验证是否真的抓到了文章
+        # 精准定位文章正文区域（通常政府网站文章在 TRS_Editor 类的 div 中）
+        content_div = soup.find('div', class_='TRS_Editor')
+        if content_div:
+            article_text = content_div.get_text(separator=' ', strip=True)
+        else:
+            article_text = soup.get_text(separator=' ', strip=True)
+        
         if len(article_text) < 100:
-            print("警告：网页内容过少，疑似被防火墙拦截，启动防御模式。")
+            print("⚠️ 警告：网页内容过少，疑似被防火墙拦截或链接非具体文章，启动防御模式。")
             return safe_fallback_data
             
         current_year = datetime.datetime.now().year
         current_week_num = datetime.datetime.now().isocalendar()[1]
-        current_week_str = f"{current_year}年第{current_week_num}周"
+        
+        # 尝试从文章中提取真实发布的周次
+        week_match = re.search(r"(202\d)\s*年\s*第\s*(\d{1,2})\s*周", article_text)
+        if week_match:
+            current_week_str = f"{week_match.group(1)}年第{week_match.group(2)}周"
+        else:
+            current_week_str = f"{current_year}年第{current_week_num}周"
         
         new_data = {
             "covid": extract_pathogen_data(article_text, "(?:新冠|新型冠状病毒)"),
@@ -64,29 +87,26 @@ def process_weekly_data():
                 val = new_data[key] if new_data[key] is not None else (data[key][-1] if len(data[key]) > 0 else 0)
                 data[key].append(val)
         
-        data["updateTime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (疾控官网直连抓取)"
+        data["updateTime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " (疾控官网直连成功)"
         return data
         
     except Exception as e:
-        print(f"爬虫遭遇异常 ({e})，强制降级使用防御基础数据。")
+        print(f"❌ 爬虫遭遇异常 ({e})，强制降级使用防御基础数据。")
         return safe_fallback_data
 
 def build_dashboard():
-    # 获取数据（不论失败成功，必定有数据返回）
     data = process_weekly_data()
     json_str = json.dumps(data, ensure_ascii=False)
     
-    # 替换前端模板
     with open('index_template.html', 'r', encoding='utf-8') as f:
         template = f.read()
         
     final_html = template.replace('{{ CDC_DATA_PLACEHOLDER }}', json_str)
     
-    # 写入最终呈现的网页
     with open('index.html', 'w', encoding='utf-8') as f:
         f.write(final_html)
         
-    print("✅ 成功生成稳定版驾驶舱 index.html")
+    print("✅ 成功生成最新驾驶舱 HTML。")
 
 if __name__ == "__main__":
     build_dashboard()
